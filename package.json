@@ -1,0 +1,11 @@
+{
+  "name": "uyra-root",
+  "version": "1.0.0",
+  "description": "UYRA Emergency Incident Management Platform",
+  "private": true,
+  "scripts": {
+    "start:backend": "cd backend && npm run start",
+    "start:user": "cd user-frontend && npm run dev",
+    "start:admin": "cd admin-frontend && npm run dev"
+  }
+}

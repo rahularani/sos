@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum EmergencyCategory {
+  FIRE
+  ROAD_ACCIDENT
+  MEDICAL
+  FLOOD
+  BUILDING_COLLAPSE
+  OTHER
+}
+
+enum SeverityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  REPORTED
+  ASSIGNED
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+enum TeamAvailabilityStatus {
+  AVAILABLE
+  DISPATCHED
+  BUSY
+  OFF_DUTY
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  EN_ROUTE
+  ON_SCENE
+  COMPLETED
+  CANCELLED
+}
+
+model Admin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admins")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String?  // null if signed up purely via Google OAuth
+  fullName    String
+  phoneNumber String?
+  isVerified  Boolean  @default(false)
+  googleId    String?  @unique
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  otps        VerificationOtp[]
+
+  @@map("users")
+}
+
+enum OtpPurpose {
+  SIGNUP
+  FORGOT_PASSWORD
+}
+
+model VerificationOtp {
+  id        String     @id @default(uuid())
+  email     String
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
+  otp       String
+  purpose   OtpPurpose
+  expiresAt DateTime
+  consumed  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  @@map("verification_otps")
+  @@index([email])
+  @@index([otp])
+  @@index([expiresAt])
+}
+
+model ResponseTeam {
+  id           String                 @id @default(uuid())
+  name         String                 @unique
+  category     EmergencyCategory
+  latitude     Float
+  longitude    Float
+  status       TeamAvailabilityStatus @default(AVAILABLE)
+  contactPhone String?
+  notes        String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  assignments  TeamAssignment[]
+
+  @@map("response_teams")
+  @@index([category])
+  @@index([status])
+}
+
+model TeamAssignment {
+  id         String           @id @default(uuid())
+  incidentId String
+  incident   Incident         @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  teamId     String
+  team       ResponseTeam     @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  status     AssignmentStatus @default(ASSIGNED)
+  assignedBy String           @default("System")
+  notes      String?
+  assignedAt DateTime         @default(now())
+  completedAt DateTime?
+
+  @@map("team_assignments")
+  @@index([incidentId])
+  @@index([teamId])
+  @@index([status])
+  @@index([assignedAt])
+}
+
+model Incident {
+  id                 String             @id @default(uuid())
+  referenceNumber    String             @unique
+  title              String
+  description        String
+  category           EmergencyCategory
+  peopleBracket      String             @default("1")
+  peopleCount        Int                @default(1)
+  contactName        String?
+  contactPhone       String?
+  latitude           Float?
+  longitude          Float?
+  accuracy           Float?
+  address            String?
+  locationTimestamp  DateTime?
+  suggestedSeverity  SeverityLevel
+  confirmedSeverity  SeverityLevel
+  categoryScore      Int                @default(1)
+  peopleScore        Int                @default(0)
+  totalScore         Int                @default(1)
+  matchedKeywords    String[]           @default([])
+  isKeywordEscalated Boolean            @default(false)
+  
+  // Intelligent Prioritization (Round 2 Phase 1)
+  priorityScore      Float              @default(0)
+  priorityLevel      PriorityLevel      @default(LOW)
+  priorityRecalculatedAt DateTime?
+
+  status             IncidentStatus     @default(PENDING)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  statusHistory      IncidentStatusHistory[]
+  assignments        TeamAssignment[]
+
+  @@map("incidents")
+  @@index([status])
+  @@index([category])
+  @@index([suggestedSeverity])
+  @@index([confirmedSeverity])
+  @@index([priorityScore])
+  @@index([priorityLevel])
+  @@index([createdAt])
+}
+
+model IncidentStatusHistory {
+  id             String          @id @default(uuid())
+  incidentId     String
+  incident       Incident        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  previousStatus IncidentStatus?
+  newStatus      IncidentStatus
+  updatedBy      String
+  note           String?
+  createdAt      DateTime        @default(now())
+
+  @@map("incident_status_history")
+  @@index([incidentId])
+  @@index([createdAt])
+}
